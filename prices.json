@@ -1,0 +1,83 @@
+{
+  "date": "2026-09-09",
+  "target_postcode": "M23 9GF",
+  "radius_miles": 10,
+  "fuel": "B7S",
+  "fuel_description": "Standard diesel",
+  "tesco_diesel_average_pence": 185.4,
+  "station_count": 10,
+  "archive_commit": "1dde432395f2d15c94643d0f8086e476f879995f",
+  "archive_timestamp": "2026-09-09T15:04:57Z",
+  "stations": [
+    {
+      "name": "BAGULEY EXTRA - PETROL FILLING STATION",
+      "postcode": "M23 9TJ",
+      "diesel": 188.9,
+      "distance_miles": 1.57,
+      "station_id": ""
+    },
+    {
+      "name": "WILMSLOW HANDFORTH EXTRA - PETROL FILLING STATION",
+      "postcode": "SK9 3PA",
+      "diesel": 189.9,
+      "distance_miles": 3.58,
+      "station_id": ""
+    },
+    {
+      "name": "SALE MANOR AVE EXPRESS",
+      "postcode": "M33 4XA",
+      "diesel": 188.9,
+      "distance_miles": 3.93,
+      "station_id": ""
+    },
+    {
+      "name": "STRETFORD EXTRA - PETROL FILLING STATION",
+      "postcode": "M32 0QW",
+      "diesel": 184.9,
+      "distance_miles": 5.34,
+      "station_id": ""
+    },
+    {
+      "name": "STOCKPORT EXTRA - PETROL FILLING STATION",
+      "postcode": "SK1 2BT",
+      "diesel": 188.9,
+      "distance_miles": 5.44,
+      "station_id": ""
+    },
+    {
+      "name": "MANCHESTER GORTON EXTRA - PETROL FILLING STATION",
+      "postcode": "M18 8LD",
+      "diesel": 180.9,
+      "distance_miles": 6.82,
+      "station_id": ""
+    },
+    {
+      "name": "IRLAM EXTRA - PETROL FILLING STATION",
+      "postcode": "M44 6BL",
+      "diesel": 185.9,
+      "distance_miles": 7.26,
+      "station_id": ""
+    },
+    {
+      "name": "SALFORD EXTRA - PETROL FILLING STATION",
+      "postcode": "M6 5JG",
+      "diesel": 183.9,
+      "distance_miles": 7.43,
+      "station_id": ""
+    },
+    {
+      "name": "DROYLSDEN SUPERSTORE - PETROL FILLING STATION",
+      "postcode": "M43 6TQ",
+      "diesel": 179.9,
+      "distance_miles": 8.49,
+      "station_id": ""
+    },
+    {
+      "name": "FAILSWORTH EXTRA - PETROL FILLING STATION",
+      "postcode": "M35 0EJ",
+      "diesel": 181.9,
+      "distance_miles": 9.88,
+      "station_id": ""
+    }
+  ]
+}
