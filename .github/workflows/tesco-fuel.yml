@@ -1,0 +1,495 @@
+name: Fetch Daily Tesco Fuel Price
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # 5:00 AM UTC every day
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-fuel-price:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch Yesterday's Tesco Diesel Average
+        run: |
+          python3 <<'PY'
+          import csv
+          import io
+          import json
+          import math
+          import urllib.request
+          import urllib.parse
+          from datetime import datetime, timedelta, timezone
+          from zoneinfo import ZoneInfo
+
+          # ============================================================
+          # SETTINGS
+          # ============================================================
+
+          TARGET_POSTCODE = "M23 9GF"
+
+          # Coordinates for M23 9GF
+          TARGET_LAT = 53.3827
+          TARGET_LON = -2.2727
+
+          # Search radius
+          RADIUS_MILES = 10
+
+          # Fuel Finder standard diesel
+          DIESEL_FIELD = "forecourts.fuel_price.B7S"
+
+          # Fuel Finder archive
+          REPO = "matthewgall/fuelfinder-archive"
+          FILE_PATH = "data.csv"
+
+          # ============================================================
+          # HELPERS
+          # ============================================================
+
+          def haversine_miles(lat1, lon1, lat2, lon2):
+              """
+              Calculate straight-line distance between two coordinates.
+              """
+              R = 3958.7613
+
+              phi1 = math.radians(lat1)
+              phi2 = math.radians(lat2)
+
+              d_phi = math.radians(lat2 - lat1)
+              d_lambda = math.radians(lon2 - lon1)
+
+              a = (
+                  math.sin(d_phi / 2) ** 2
+                  + math.cos(phi1)
+                  * math.cos(phi2)
+                  * math.sin(d_lambda / 2) ** 2
+              )
+
+              return 2 * R * math.asin(math.sqrt(a))
+
+
+          def fetch_url(url, headers=None):
+              """
+              Download a URL and return its contents as text.
+              """
+              request = urllib.request.Request(
+                  url,
+                  headers=headers or {
+                      "User-Agent": "Mozilla/5.0",
+                      "Accept": "*/*"
+                  }
+              )
+
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return response.read().decode("utf-8-sig")
+
+
+          def get_yesterday_uk():
+              """
+              Work out yesterday using UK time rather than UTC.
+              """
+              uk_now = datetime.now(ZoneInfo("Europe/London"))
+              yesterday = uk_now.date() - timedelta(days=1)
+              return yesterday
+
+
+          def get_archive_commit_for_date(target_date):
+              """
+              Ask GitHub for the latest commit to data.csv that existed
+              on or before the end of yesterday.
+
+              This is what allows us to retrieve the historical dataset
+              rather than today's dataset.
+              """
+
+              until_dt = datetime(
+                  target_date.year,
+                  target_date.month,
+                  target_date.day,
+                  23,
+                  59,
+                  59,
+                  tzinfo=timezone.utc
+              )
+
+              params = urllib.parse.urlencode({
+                  "path": FILE_PATH,
+                  "until": until_dt.isoformat().replace("+00:00", "Z"),
+                  "per_page": "1"
+              })
+
+              url = (
+                  f"https://api.github.com/repos/{REPO}/commits?"
+                  f"{params}"
+              )
+
+              text = fetch_url(
+                  url,
+                  {
+                      "User-Agent": "Turbo-Transit-Logistics-Fuel-Tracker",
+                      "Accept": "application/vnd.github+json"
+                  }
+              )
+
+              commits = json.loads(text)
+
+              if not commits:
+                  raise RuntimeError(
+                      f"No archive commit found for {target_date}"
+                  )
+
+              return commits[0]
+
+
+          def is_tesco(row):
+              """
+              Identify Tesco stations.
+              """
+
+              fields_to_check = [
+                  row.get("forecourts.brand_name", ""),
+                  row.get("forecourts.trading_name", ""),
+                  row.get("forecourts.name", ""),
+                  row.get("forecourts.company_name", "")
+              ]
+
+              combined = " ".join(fields_to_check).lower()
+
+              return "tesco" in combined
+
+
+          def looks_like_motorway_station(row):
+              """
+              Exclude motorway/service-area locations.
+
+              We use several fields because the Fuel Finder data has
+              changed over time and not every dataset version exposes
+              motorway information in exactly the same way.
+              """
+
+              values = []
+
+              for key, value in row.items():
+                  key_lower = key.lower()
+
+                  if (
+                      "motorway" in key_lower
+                      or "service" in key_lower
+                      or "location" in key_lower
+                      or "address" in key_lower
+                      or "name" in key_lower
+                      or "trading" in key_lower
+                      or "brand" in key_lower
+                  ):
+                      if value:
+                          values.append(str(value).lower())
+
+              combined = " ".join(values)
+
+              motorway_terms = [
+                  "motorway service",
+                  "motorway services",
+                  "moto services",
+                  "moto service",
+                  "welcome break",
+                  "roadchef",
+                  "motorway",
+                  "service area",
+                  "services"
+              ]
+
+              return any(term in combined for term in motorway_terms)
+
+
+          def parse_float(value):
+              try:
+                  if value is None:
+                      return None
+
+                  value = str(value).strip()
+
+                  if not value:
+                      return None
+
+                  return float(value)
+
+              except Exception:
+                  return None
+
+
+          # ============================================================
+          # DETERMINE YESTERDAY
+          # ============================================================
+
+          yesterday = get_yesterday_uk()
+
+          print(f"Target postcode: {TARGET_POSTCODE}")
+          print(f"Search radius: {RADIUS_MILES} miles")
+          print(f"Looking for prices from: {yesterday}")
+
+
+          # ============================================================
+          # FIND THE HISTORICAL ARCHIVE VERSION
+          # ============================================================
+
+          print("")
+          print("Finding archived Fuel Finder dataset...")
+
+          commit = get_archive_commit_for_date(yesterday)
+
+          commit_sha = commit["sha"]
+          commit_date = commit["commit"]["committer"]["date"]
+
+          print(f"Archive commit: {commit_sha}")
+          print(f"Archive timestamp: {commit_date}")
+
+
+          # ============================================================
+          # DOWNLOAD THAT HISTORICAL CSV
+          # ============================================================
+
+          raw_url = (
+              f"https://raw.githubusercontent.com/"
+              f"{REPO}/{commit_sha}/{FILE_PATH}"
+          )
+
+          print("")
+          print("Downloading historical dataset...")
+
+          csv_text = fetch_url(
+              raw_url,
+              {
+                  "User-Agent": "Turbo-Transit-Logistics-Fuel-Tracker",
+                  "Accept": "text/csv,*/*"
+              }
+          )
+
+          print(f"Downloaded {len(csv_text):,} characters")
+
+
+          # ============================================================
+          # READ CSV
+          # ============================================================
+
+          reader = csv.DictReader(io.StringIO(csv_text))
+
+          if not reader.fieldnames:
+              raise RuntimeError("CSV has no header row")
+
+          print("")
+          print(f"CSV columns found: {len(reader.fieldnames)}")
+
+
+          required_fields = [
+              "forecourts.location.latitude",
+              "forecourts.location.longitude",
+              DIESEL_FIELD
+          ]
+
+          missing = [
+              field
+              for field in required_fields
+              if field not in reader.fieldnames
+          ]
+
+          if missing:
+              raise RuntimeError(
+                  "Required CSV fields missing: "
+                  + ", ".join(missing)
+              )
+
+
+          # ============================================================
+          # FIND QUALIFYING TESCO STATIONS
+          # ============================================================
+
+          stations = []
+
+          for row in reader:
+
+              # Tesco only
+              if not is_tesco(row):
+                  continue
+
+              # Latitude / longitude
+              lat = parse_float(
+                  row.get("forecourts.location.latitude")
+              )
+
+              lon = parse_float(
+                  row.get("forecourts.location.longitude")
+              )
+
+              if lat is None or lon is None:
+                  continue
+
+              # Distance from M23 9GF
+              distance = haversine_miles(
+                  TARGET_LAT,
+                  TARGET_LON,
+                  lat,
+                  lon
+              )
+
+              if distance > RADIUS_MILES:
+                  continue
+
+              # Exclude motorway/service stations
+              if looks_like_motorway_station(row):
+                  print(
+                      "Excluded motorway/service station:",
+                      row.get("forecourts.trading_name", ""),
+                      row.get("forecourts.location.postcode", "")
+                  )
+                  continue
+
+              # Diesel price
+              diesel = parse_float(
+                  row.get(DIESEL_FIELD)
+              )
+
+              if diesel is None:
+                  continue
+
+              # Fuel Finder prices can theoretically be submitted in
+              # pounds rather than pence. Convert if necessary.
+              if diesel < 10:
+                  diesel *= 100
+
+              postcode = (
+                  row.get("forecourts.location.postcode", "")
+                  .strip()
+              )
+
+              name = (
+                  row.get("forecourts.trading_name", "")
+                  or row.get("forecourts.brand_name", "")
+                  or row.get("forecourts.name", "")
+              ).strip()
+
+              station_id = (
+                  row.get("forecourts.pfs_id", "")
+                  or row.get("forecourts.id", "")
+                  or row.get("forecourts.site_id", "")
+              )
+
+              stations.append({
+                  "name": name,
+                  "postcode": postcode,
+                  "diesel": round(diesel, 1),
+                  "distance_miles": round(distance, 2),
+                  "station_id": station_id
+              })
+
+
+          # ============================================================
+          # SAFETY CHECK
+          # ============================================================
+
+          if not stations:
+              raise RuntimeError(
+                  "No qualifying Tesco stations were found. "
+                  "Nothing will be written as a fake price."
+              )
+
+
+          # ============================================================
+          # CALCULATE AVERAGE
+          # ============================================================
+
+          prices = [station["diesel"] for station in stations]
+
+          average_price = round(
+              sum(prices) / len(prices),
+              1
+          )
+
+
+          # ============================================================
+          # SORT NEAREST FIRST
+          # ============================================================
+
+          stations.sort(
+              key=lambda x: x["distance_miles"]
+          )
+
+
+          # ============================================================
+          # DISPLAY RESULTS
+          # ============================================================
+
+          print("")
+          print("=" * 70)
+          print("TESCO DIESEL RESULTS")
+          print("=" * 70)
+
+          for station in stations:
+              print(
+                  f"{station['name']} | "
+                  f"{station['postcode']} | "
+                  f"{station['distance_miles']} miles | "
+                  f"{station['diesel']}p"
+              )
+
+          print("=" * 70)
+          print(
+              f"Stations included: {len(stations)}"
+          )
+          print(
+              f"Average diesel price: {average_price}p"
+          )
+          print("=" * 70)
+
+
+          # ============================================================
+          # WRITE RESULT
+          # ============================================================
+
+          output = {
+              "date": yesterday.isoformat(),
+              "target_postcode": TARGET_POSTCODE,
+              "radius_miles": RADIUS_MILES,
+              "fuel": "B7S",
+              "fuel_description": "Standard diesel",
+              "tesco_diesel_average_pence": average_price,
+              "station_count": len(stations),
+              "archive_commit": commit_sha,
+              "archive_timestamp": commit_date,
+              "stations": stations
+          }
+
+          with open(
+              "prices.json",
+              "w",
+              encoding="utf-8"
+          ) as out:
+              json.dump(
+                  output,
+                  out,
+                  indent=2
+              )
+
+          print("")
+          print("prices.json created successfully.")
+          print(
+              f"Saved average: {average_price}p"
+          )
+
+          PY
+
+      - name: Commit and Push Updated Price
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add prices.json
+
+          git commit -m "Update yesterday's Tesco diesel average" || exit 0
+
+          git push
