@@ -1,18 +1,18 @@
 {
-  "date": "2026-09-09",
+  "date": "2026-09-10",
   "target_postcode": "M23 9GF",
   "radius_miles": 10,
   "fuel": "B7S",
   "fuel_description": "Standard diesel",
-  "tesco_diesel_average_pence": 185.4,
+  "tesco_diesel_average_pence": 186.1,
   "station_count": 10,
-  "archive_commit": "1dde432395f2d15c94643d0f8086e476f879995f",
-  "archive_timestamp": "2026-09-09T15:04:57Z",
+  "archive_commit": "42eac9beef544ea2a9420c8075887afb585bcc85",
+  "archive_timestamp": "2026-09-10T15:05:15Z",
   "stations": [
     {
       "name": "BAGULEY EXTRA - PETROL FILLING STATION",
       "postcode": "M23 9TJ",
-      "diesel": 188.9,
+      "diesel": 190.9,
       "distance_miles": 1.57,
       "station_id": ""
     },
@@ -26,7 +26,7 @@
     {
       "name": "SALE MANOR AVE EXPRESS",
       "postcode": "M33 4XA",
-      "diesel": 188.9,
+      "diesel": 190.9,
       "distance_miles": 3.93,
       "station_id": ""
     },
@@ -47,7 +47,7 @@
     {
       "name": "MANCHESTER GORTON EXTRA - PETROL FILLING STATION",
       "postcode": "M18 8LD",
-      "diesel": 180.9,
+      "diesel": 181.9,
       "distance_miles": 6.82,
       "station_id": ""
     },
@@ -75,7 +75,7 @@
     {
       "name": "FAILSWORTH EXTRA - PETROL FILLING STATION",
       "postcode": "M35 0EJ",
-      "diesel": 181.9,
+      "diesel": 183.9,
       "distance_miles": 9.88,
       "station_id": ""
     }
