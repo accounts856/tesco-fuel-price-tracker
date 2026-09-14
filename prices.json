@@ -1,13 +1,13 @@
 {
-  "date": "2026-09-12",
+  "date": "2026-09-13",
   "target_postcode": "M23 9GF",
   "radius_miles": 10,
   "fuel": "B7S",
   "fuel_description": "Standard diesel",
   "tesco_diesel_average_pence": 186.7,
   "station_count": 10,
-  "archive_commit": "b6a3e224110492769e716ad9dd4c5ecfd1b5f2fa",
-  "archive_timestamp": "2026-09-12T15:04:12Z",
+  "archive_commit": "e1ff9ce6fa04249448295aef562a6bfaa4c2ffa8",
+  "archive_timestamp": "2026-09-13T15:04:12Z",
   "stations": [
     {
       "name": "BAGULEY EXTRA - PETROL FILLING STATION",
