@@ -16,13 +16,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fetch Yesterday's Tesco Diesel Average
+      - name: Fetch Yesterday's Tesco Baguley Diesel
         run: |
           python3 <<'PY'
           import csv
           import io
           import json
-          import math
           import urllib.request
           import urllib.parse
           from datetime import datetime, timedelta, timezone
@@ -32,14 +31,8 @@ jobs:
           # SETTINGS
           # ============================================================
 
-          TARGET_POSTCODE = "M23 9GF"
-
-          # Coordinates for M23 9GF
-          TARGET_LAT = 53.3827
-          TARGET_LON = -2.2727
-
-          # Search radius
-          RADIUS_MILES = 10
+          # Tesco Extra Baguley Postcode
+          TARGET_POSTCODE = "M23 9TJ"
 
           # Fuel Finder standard diesel
           DIESEL_FIELD = "forecourts.fuel_price.B7S"
@@ -51,28 +44,6 @@ jobs:
           # ============================================================
           # HELPERS
           # ============================================================
-
-          def haversine_miles(lat1, lon1, lat2, lon2):
-              """
-              Calculate straight-line distance between two coordinates.
-              """
-              R = 3958.7613
-
-              phi1 = math.radians(lat1)
-              phi2 = math.radians(lat2)
-
-              d_phi = math.radians(lat2 - lat1)
-              d_lambda = math.radians(lon2 - lon1)
-
-              a = (
-                  math.sin(d_phi / 2) ** 2
-                  + math.cos(phi1)
-                  * math.cos(phi2)
-                  * math.sin(d_lambda / 2) ** 2
-              )
-
-              return 2 * R * math.asin(math.sqrt(a))
-
 
           def fetch_url(url, headers=None):
               """
@@ -103,9 +74,6 @@ jobs:
               """
               Ask GitHub for the latest commit to data.csv that existed
               on or before the end of yesterday.
-
-              This is what allows us to retrieve the historical dataset
-              rather than today's dataset.
               """
 
               until_dt = datetime(
@@ -147,66 +115,6 @@ jobs:
               return commits[0]
 
 
-          def is_tesco(row):
-              """
-              Identify Tesco stations.
-              """
-
-              fields_to_check = [
-                  row.get("forecourts.brand_name", ""),
-                  row.get("forecourts.trading_name", ""),
-                  row.get("forecourts.name", ""),
-                  row.get("forecourts.company_name", "")
-              ]
-
-              combined = " ".join(fields_to_check).lower()
-
-              return "tesco" in combined
-
-
-          def looks_like_motorway_station(row):
-              """
-              Exclude motorway/service-area locations.
-
-              We use several fields because the Fuel Finder data has
-              changed over time and not every dataset version exposes
-              motorway information in exactly the same way.
-              """
-
-              values = []
-
-              for key, value in row.items():
-                  key_lower = key.lower()
-
-                  if (
-                      "motorway" in key_lower
-                      or "service" in key_lower
-                      or "location" in key_lower
-                      or "address" in key_lower
-                      or "name" in key_lower
-                      or "trading" in key_lower
-                      or "brand" in key_lower
-                  ):
-                      if value:
-                          values.append(str(value).lower())
-
-              combined = " ".join(values)
-
-              motorway_terms = [
-                  "motorway service",
-                  "motorway services",
-                  "moto services",
-                  "moto service",
-                  "welcome break",
-                  "roadchef",
-                  "motorway",
-                  "service area",
-                  "services"
-              ]
-
-              return any(term in combined for term in motorway_terms)
-
-
           def parse_float(value):
               try:
                   if value is None:
@@ -229,9 +137,8 @@ jobs:
 
           yesterday = get_yesterday_uk()
 
-          print(f"Target postcode: {TARGET_POSTCODE}")
-          print(f"Search radius: {RADIUS_MILES} miles")
-          print(f"Looking for prices from: {yesterday}")
+          print(f"Target station: Tesco Extra Baguley ({TARGET_POSTCODE})")
+          print(f"Looking for price from: {yesterday}")
 
 
           # ============================================================
@@ -282,142 +189,39 @@ jobs:
           if not reader.fieldnames:
               raise RuntimeError("CSV has no header row")
 
-          print("")
-          print(f"CSV columns found: {len(reader.fieldnames)}")
-
-
-          required_fields = [
-              "forecourts.location.latitude",
-              "forecourts.location.longitude",
-              DIESEL_FIELD
-          ]
-
-          missing = [
-              field
-              for field in required_fields
-              if field not in reader.fieldnames
-          ]
-
-          if missing:
-              raise RuntimeError(
-                  "Required CSV fields missing: "
-                  + ", ".join(missing)
-              )
-
-
           # ============================================================
-          # FIND QUALIFYING TESCO STATIONS
+          # FIND TESCO BAGULEY SPECIFICALLY
           # ============================================================
 
-          stations = []
+          baguley_price = None
+          station_name = "Tesco Extra Baguley"
 
           for row in reader:
+              postcode = row.get("forecourts.location.postcode", "").strip().upper()
 
-              # Tesco only
-              if not is_tesco(row):
-                  continue
-
-              # Latitude / longitude
-              lat = parse_float(
-                  row.get("forecourts.location.latitude")
-              )
-
-              lon = parse_float(
-                  row.get("forecourts.location.longitude")
-              )
-
-              if lat is None or lon is None:
-                  continue
-
-              # Distance from M23 9GF
-              distance = haversine_miles(
-                  TARGET_LAT,
-                  TARGET_LON,
-                  lat,
-                  lon
-              )
-
-              if distance > RADIUS_MILES:
-                  continue
-
-              # Exclude motorway/service stations
-              if looks_like_motorway_station(row):
-                  print(
-                      "Excluded motorway/service station:",
-                      row.get("forecourts.trading_name", ""),
-                      row.get("forecourts.location.postcode", "")
-                  )
-                  continue
-
-              # Diesel price
-              diesel = parse_float(
-                  row.get(DIESEL_FIELD)
-              )
-
-              if diesel is None:
-                  continue
-
-              # Fuel Finder prices can theoretically be submitted in
-              # pounds rather than pence. Convert if necessary.
-              if diesel < 10:
-                  diesel *= 100
-
-              postcode = (
-                  row.get("forecourts.location.postcode", "")
-                  .strip()
-              )
-
-              name = (
-                  row.get("forecourts.trading_name", "")
-                  or row.get("forecourts.brand_name", "")
-                  or row.get("forecourts.name", "")
-              ).strip()
-
-              station_id = (
-                  row.get("forecourts.pfs_id", "")
-                  or row.get("forecourts.id", "")
-                  or row.get("forecourts.site_id", "")
-              )
-
-              stations.append({
-                  "name": name,
-                  "postcode": postcode,
-                  "diesel": round(diesel, 1),
-                  "distance_miles": round(distance, 2),
-                  "station_id": station_id
-              })
+              # Compare postcodes ignoring internal spaces (M23 9TJ vs M239TJ)
+              if postcode.replace(" ", "") == TARGET_POSTCODE.replace(" ", ""):
+                  diesel = parse_float(row.get(DIESEL_FIELD))
+                  if diesel is not None:
+                      if diesel < 10:
+                          diesel *= 100
+                      baguley_price = round(diesel, 1)
+                      station_name = (
+                          row.get("forecourts.trading_name", "")
+                          or row.get("forecourts.name", "")
+                          or station_name
+                      ).strip()
+                      break
 
 
           # ============================================================
           # SAFETY CHECK
           # ============================================================
 
-          if not stations:
+          if baguley_price is None:
               raise RuntimeError(
-                  "No qualifying Tesco stations were found. "
-                  "Nothing will be written as a fake price."
+                  f"Could not find a valid diesel price for Tesco Baguley ({TARGET_POSTCODE})."
               )
-
-
-          # ============================================================
-          # CALCULATE AVERAGE
-          # ============================================================
-
-          prices = [station["diesel"] for station in stations]
-
-          average_price = round(
-              sum(prices) / len(prices),
-              1
-          )
-
-
-          # ============================================================
-          # SORT NEAREST FIRST
-          # ============================================================
-
-          stations.sort(
-              key=lambda x: x["distance_miles"]
-          )
 
 
           # ============================================================
@@ -426,24 +230,11 @@ jobs:
 
           print("")
           print("=" * 70)
-          print("TESCO DIESEL RESULTS")
+          print("TESCO BAGULEY DIESEL RESULT")
           print("=" * 70)
-
-          for station in stations:
-              print(
-                  f"{station['name']} | "
-                  f"{station['postcode']} | "
-                  f"{station['distance_miles']} miles | "
-                  f"{station['diesel']}p"
-              )
-
-          print("=" * 70)
-          print(
-              f"Stations included: {len(stations)}"
-          )
-          print(
-              f"Average diesel price: {average_price}p"
-          )
+          print(f"Station: {station_name}")
+          print(f"Postcode: {TARGET_POSTCODE}")
+          print(f"Diesel Price: {baguley_price}p")
           print("=" * 70)
 
 
@@ -454,14 +245,12 @@ jobs:
           output = {
               "date": yesterday.isoformat(),
               "target_postcode": TARGET_POSTCODE,
-              "radius_miles": RADIUS_MILES,
+              "station_name": station_name,
               "fuel": "B7S",
               "fuel_description": "Standard diesel",
-              "tesco_diesel_average_pence": average_price,
-              "station_count": len(stations),
+              "tesco_diesel_average_pence": baguley_price,
               "archive_commit": commit_sha,
-              "archive_timestamp": commit_date,
-              "stations": stations
+              "archive_timestamp": commit_date
           }
 
           with open(
@@ -477,9 +266,7 @@ jobs:
 
           print("")
           print("prices.json created successfully.")
-          print(
-              f"Saved average: {average_price}p"
-          )
+          print(f"Saved Baguley price: {baguley_price}p")
 
           PY
 
@@ -490,6 +277,6 @@ jobs:
 
           git add prices.json
 
-          git commit -m "Update yesterday's Tesco diesel average" || exit 0
+          git commit -m "Update yesterday's Tesco Baguley diesel price" || exit 0
 
           git push
