@@ -1,10 +1,10 @@
 {
-  "date": "2026-11-19",
+  "date": "2026-11-20",
   "target_postcode": "M23 9TJ",
   "station_name": "BAGULEY EXTRA - PETROL FILLING STATION",
   "fuel": "B7S",
   "fuel_description": "Standard diesel",
   "tesco_diesel_average_pence": 189.9,
-  "archive_commit": "7961042284117c84f52c7d244dbd10eda4914a42",
-  "archive_timestamp": "2026-11-19T16:03:21Z"
+  "archive_commit": "75ac14cc280fb571d03be7b349c5888d97ffd870",
+  "archive_timestamp": "2026-11-20T16:03:17Z"
 }
